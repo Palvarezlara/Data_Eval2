@@ -20,10 +20,10 @@ jobs:
         with:
           host: ${{ secrets.EC2_BACK_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          key: ${{ secrets.EC2_BACK_SSH_KEY }}
           proxy_host: ${{ secrets.EC2_HOST }}
           proxy_username: ${{ secrets.EC2_USER }}
-          proxy_key: ${{ secrets.EC2_SSH_KEY }}
+          proxy_key: ${{ secrets.EC2_FRONT_SSH_KEY }}
           source: "*.sql"
           target: "/home/${{ secrets.EC2_USER }}/migrations"
 
@@ -32,17 +32,17 @@ jobs:
       - name: deploy mysql y ejecutar migraciones via back
         uses: appleboy/ssh-action@v1.0.3
         env:
-          JUMP_KEY: ${{ secrets.EC2_SSH_KEY }}
+          JUMP_KEY: ${{ secrets.EC2_DATA_SSH_KEY }}
           DATA_HOST: ${{ secrets.EC2_DATA_HOST }}
           REMOTE_USER: ${{ secrets.EC2_USER }}
           DB_PASS: ${{ secrets.DB_ROOT_PASSWORD }}
         with:
           host: ${{ secrets.EC2_BACK_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          key: ${{ secrets.EC2_BACK_SSH_KEY }}
           proxy_host: ${{ secrets.EC2_HOST }}
           proxy_username: ${{ secrets.EC2_USER }}
-          proxy_key: ${{ secrets.EC2_SSH_KEY }}
+          proxy_key: ${{ secrets.EC2_FRONT_SSH_KEY }}
           envs: JUMP_KEY,DATA_HOST,REMOTE_USER,DB_PASS
           script: |
             mkdir -p ~/.ssh ~/migrations
