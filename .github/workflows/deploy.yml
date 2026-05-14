@@ -1,6 +1,5 @@
 name: ci-cd pipeline - migraciones db
 
-# se ejecuta cuando hago push a la rama deploy
 on:
   push:
     branches:
@@ -11,16 +10,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # paso 1 - bajar el codigo (incluye los scripts sql)
+      # paso 1 - bajar el codigo
       - name: checkout
         uses: actions/checkout@v4
 
-      # paso 2 - copiar los scripts sql a la ec2 privada via bastion
-      # proxy_host = ec2 publica del front, host = ec2 privada con mysql
-      - name: copiar scripts sql
+      # paso 2 - copiar sql a back (intermediario) via front como proxy
+      - name: copiar scripts sql a back
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.EC2_DATA_HOST }}
+          host: ${{ secrets.EC2_BACK_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           proxy_host: ${{ secrets.EC2_HOST }}
@@ -29,40 +27,68 @@ jobs:
           source: "*.sql"
           target: "/home/${{ secrets.EC2_USER }}/migrations"
 
-      # paso 3 - levantar mysql en docker (solo si no esta corriendo) y ejecutar migraciones
-      - name: deploy mysql y ejecutar migraciones
+      # paso 3 - conectar a back (via front), desde back saltar a data
+      # appleboy solo soporta un nivel de proxy, el segundo salto lo hace ssh nativo desde back
+      - name: deploy mysql y ejecutar migraciones via back
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          JUMP_KEY: ${{ secrets.EC2_SSH_KEY }}
+          DATA_HOST: ${{ secrets.EC2_DATA_HOST }}
+          REMOTE_USER: ${{ secrets.EC2_USER }}
+          DB_PASS: ${{ secrets.DB_ROOT_PASSWORD }}
         with:
-          host: ${{ secrets.EC2_DATA_HOST }}
+          host: ${{ secrets.EC2_BACK_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           proxy_host: ${{ secrets.EC2_HOST }}
           proxy_username: ${{ secrets.EC2_USER }}
           proxy_key: ${{ secrets.EC2_SSH_KEY }}
+          envs: JUMP_KEY,DATA_HOST,REMOTE_USER,DB_PASS
           script: |
-            # levantar el contenedor de mysql solo si no esta corriendo
-            # el volumen mysql_data persiste los datos entre reinicios
-            if [ ! "$(docker ps -q -f name=mysql-data)" ]; then
+            mkdir -p ~/.ssh ~/migrations
+
+            # escribir clave ssh para saltar de back a data
+            echo "$JUMP_KEY" > ~/.ssh/jump_key
+            chmod 600 ~/.ssh/jump_key
+
+            # crear directorio en data y copiar sql desde back
+            ssh -i ~/.ssh/jump_key -o StrictHostKeyChecking=no \
+              "$REMOTE_USER@$DATA_HOST" "mkdir -p ~/migrations"
+
+            scp -i ~/.ssh/jump_key -o StrictHostKeyChecking=no \
+              ~/migrations/*.sql \
+              "$REMOTE_USER@$DATA_HOST:~/migrations/"
+
+            # generar script que se ejecutara en data (heredoc expande DB_PASS aqui en back)
+            cat > /tmp/data_deploy.sh << SCRIPTEOF
+            #!/bin/bash
+            set -e
+
+            if [ ! "\$(docker ps -q -f name=mysql-data)" ]; then
               docker rm mysql-data 2>/dev/null || true
-
-              docker run -d \
-                --name mysql-data \
-                --restart always \
-                -p 3306:3306 \
-                -e MYSQL_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }} \
-                -e MYSQL_DATABASE=proyecto_db \
-                -v mysql_data:/var/lib/mysql \
+              docker run -d \\
+                --name mysql-data \\
+                --restart always \\
+                -p 3306:3306 \\
+                -e MYSQL_ROOT_PASSWORD="$DB_PASS" \\
+                -e MYSQL_DATABASE=proyecto_db \\
+                -v mysql_data:/var/lib/mysql \\
                 mysql:8.0
-
               echo "Esperando que MySQL inicie..."
               sleep 30
             fi
 
-            # ejecutar migraciones dentro del contenedor
-            # 01 - crear base de datos y tablas (idempotente)
-            docker exec -i mysql-data mysql -u root -p${{ secrets.DB_ROOT_PASSWORD }} < ~/migrations/01_creacion_base_datos.sql
-
-            # 02 - procedimientos, funciones y triggers (--force para re-runs)
-            docker exec -i mysql-data mysql -u root -p${{ secrets.DB_ROOT_PASSWORD }} --force < ~/migrations/02_backup_y_mantenimiento.sql
-
+            docker exec -i mysql-data mysql -uroot -p"$DB_PASS" < ~/migrations/01_creacion_base_datos.sql
+            docker exec -i mysql-data mysql -uroot -p"$DB_PASS" --force < ~/migrations/02_backup_y_mantenimiento.sql
             echo "Migraciones ejecutadas exitosamente"
+            SCRIPTEOF
+
+            # enviar el script a data y ejecutarlo
+            scp -i ~/.ssh/jump_key -o StrictHostKeyChecking=no \
+              /tmp/data_deploy.sh "$REMOTE_USER@$DATA_HOST:/tmp/"
+
+            ssh -i ~/.ssh/jump_key -o StrictHostKeyChecking=no \
+              "$REMOTE_USER@$DATA_HOST" "bash /tmp/data_deploy.sh"
+
+            # limpiar
+            rm -f ~/.ssh/jump_key /tmp/data_deploy.sh
