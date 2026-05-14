@@ -45,7 +45,7 @@ jobs:
             mkdir -p ~/.ssh ~/migrations
 
             # escribir clave ssh para saltar de back a data
-            echo "$JUMP_KEY" > ~/.ssh/jump_key
+            echo "$JUMP_KEY" | tr -d '\r' > ~/.ssh/jump_key
             chmod 600 ~/.ssh/jump_key
 
             # crear directorio en data y copiar sql desde back
@@ -76,7 +76,7 @@ jobs:
             fi
 
             docker exec -i mysql-data mysql -uroot -p"${{ secrets.DB_ROOT_PASSWORD }}" < ~/migrations/01_creacion_base_datos.sql
-            docker exec -i mysql-data mysql -uroot -p"${{ secrets.DB_ROOT_PASSWORD }}" --force < ~/migrations/02_backup_y_mantenimiento.sql
+            docker exec -i mysql-data mysql -uroot -p"${{ secrets.DB_ROOT_PASSWORD }}" proyecto_db --force < ~/migrations/02_backup_y_mantenimiento.sql
             echo "Migraciones ejecutadas exitosamente"
             SCRIPTEOF
 
