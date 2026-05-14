@@ -76,7 +76,7 @@ INSERT INTO usuarios (nombre, email, edad, estado) VALUES
 ('Carlos Martinez Sánchez', 'carlos.martinez@ejemplo.com', 45, 'activo'),
 ('Ana Gonzalez Fernández', 'ana.gonzalez@ejemplo.com', 22, 'activo'),
 ('Luis Hernandez Torres', 'luis.hernandez@ejemplo.com', 39, 'inactivo'),
-('Sofía Díaz Ramírez', 'sofia.diaz@ejemplo.com', 31, 'activo'),
+('Sofia Diaz Ramírez', 'sofia.diaz@ejemplo.com', 31, 'activo'),
 ('Pedro Jiménez Castro', 'pedro.jimenez@ejemplo.com', 27, 'activo'),
 ('Laura Moreno Vargas', 'laura.moreno@ejemplo.com', 29, 'activo')
 ON DUPLICATE KEY UPDATE 

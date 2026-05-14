@@ -2,6 +2,7 @@ name: ci-cd pipeline - migraciones db
 
 on:
   push:
+    # Rama deploy para ejecutar migraciones a data, se hace push a esta rama desde back cada vez que se actualizan los scripts sql
     branches:
       - deploy
 
