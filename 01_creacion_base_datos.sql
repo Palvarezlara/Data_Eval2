@@ -71,11 +71,11 @@ CREATE INDEX idx_usuarios_nombre_estado ON usuarios(nombre, estado);
 
 -- Insertar usuarios de ejemplo para pruebas iniciales
 INSERT INTO usuarios (nombre, email, edad, estado) VALUES
-('Juan Pérez García', 'juan.perez@ejemplo.com', 28, 'activo'),
-('María Rodríguez López', 'maria.rodriguez@ejemplo.com', 34, 'activo'),
-('Carlos Martínez Sánchez', 'carlos.martinez@ejemplo.com', 45, 'activo'),
-('Ana González Fernández', 'ana.gonzalez@ejemplo.com', 22, 'activo'),
-('Luis Hernández Torres', 'luis.hernandez@ejemplo.com', 39, 'inactivo'),
+('Juan Perez Garcia', 'juan.perez@ejemplo.com', 28, 'activo'),
+('Maria Rodriguez López', 'maria.rodriguez@ejemplo.com', 34, 'activo'),
+('Carlos Martinez Sánchez', 'carlos.martinez@ejemplo.com', 45, 'activo'),
+('Ana Gonzalez Fernández', 'ana.gonzalez@ejemplo.com', 22, 'activo'),
+('Luis Hernandez Torres', 'luis.hernandez@ejemplo.com', 39, 'inactivo'),
 ('Sofía Díaz Ramírez', 'sofia.diaz@ejemplo.com', 31, 'activo'),
 ('Pedro Jiménez Castro', 'pedro.jimenez@ejemplo.com', 27, 'activo'),
 ('Laura Moreno Vargas', 'laura.moreno@ejemplo.com', 29, 'activo')
