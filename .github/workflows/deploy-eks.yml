@@ -1,0 +1,85 @@
+name: Deploy Base de Datos a EKS
+
+on:
+  push:
+    branches:
+      - deploy
+
+jobs:
+  build:
+    name: Build imagen MySQL personalizada
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar codigo del repo
+        uses: actions/checkout@v4
+
+      - name: Verificar archivos SQL
+        run: ls -la *.sql
+
+  docker-build-push:
+    name: Docker build y push a ECR
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Descargar codigo del repo
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciales AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login en Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Docker build y push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/ms-database:latest
+
+  deploy:
+    name: Deploy a EKS con kubectl
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+
+    steps:
+      - name: Descargar codigo del repo
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciales AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login en Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Configurar kubectl para EKS
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ secrets.AWS_REGION }} \
+            --name ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: Crear namespace si no existe
+        run: kubectl create namespace ${{ secrets.EKS_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Actualizar imagen en deployment
+        run: |
+          sed -i "s|PLACEHOLDER_ECR/ms-database:latest|${{ steps.login-ecr.outputs.registry }}/ms-database:latest|g" k8s/deployment.yaml
+
+      - name: Aplicar manifiestos en EKS
+        run: kubectl apply -f k8s/deployment.yaml -n ${{ secrets.EKS_NAMESPACE }}
+
+      - name: Verificar rollout
+        run: kubectl rollout status deployment/db -n ${{ secrets.EKS_NAMESPACE }}
